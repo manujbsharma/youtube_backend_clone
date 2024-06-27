@@ -323,12 +323,20 @@ The Algorithm we follow to login a user :
 
 // 1) get data from request body
         const {username, email, password} = req.body
+        console.log(email);
 
 // 2) give uername or email based access
         // checking - Atleast username or email should exists:
-        if (!username || !email) {
-            throw new APIError(400, "Atleast one (username or email) is required")
+        if (!username && !email) {
+            throw new APIError(400, "Username or Email is required")
         }
+//Alternative - If only one of them is required
+        // if (!(username || email)) {
+        //     throw new APIError(400, "Username and email are required")
+        // }
+
+
+
 
 // 3) If Exist - find the user:
         // a) if we get [any one or both] of the required - Check in database

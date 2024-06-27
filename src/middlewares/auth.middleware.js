@@ -10,6 +10,8 @@ export const verifyJWT = asyncHandler(async(req, _, next) => { // here res chang
     try {
         // As this is a middleware, we require to pass it once it done. that's why we used "next" keyword 
         const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "")
+        console.log(token) // Just to see, if it is sending or not
+
     // Storing the access token, using the cookies from request body(for web users) or from header (for mobile users) 
         if (!token) {
             // If token doesn't exist. then throw an error
