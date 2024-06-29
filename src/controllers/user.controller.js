@@ -3,7 +3,7 @@ import { APIError } from "../utils(utilities)/APIError.js"; // used for validati
 import { User } from "../models/user.model.js"; // used to add, delete and check if user exists or not
 import { uploadOnCloudinary } from "../utils(utilities)/couldinary.js"; // used to upload files on clodinary server
 import { APIResponse } from "../utils(utilities)/APIResponse.js"; // used to return structured and crafted response
-import { response } from "express";
+import jwt from "jsonwebtoken";
 
 // ----------------------------------------------------------------------------------------------/
                     // METHODS -> FUNCTIONS that can called MULTIPLE TIMES //
@@ -443,9 +443,64 @@ const loggedOutUser = asyncHandler(async(req, res) => {
 
 })
 
+//---------------------------------------------------------------//
+//                  REFRESHING ACCESS TOKEN                      //
+//---------------------------------------------------------------//
+const refreshAccessToken = asyncHandler(async(req, res) =>{
+    // we taking the token from the user end from cookies or body
+    const incomingRefreshToken =  req.cookie.refreshToken || req.body.refreshToken
 
+    // If we don't get the incomingRefreshToken
+    if (incomingRefreshToken) {
+        throw new APIError(401, "Unauthorized Request")
+    }
 
+    // Just a safety measure, if something went wrong through out the process inside "try" OR to prevent the app from crashing
+    try {
+        // Verifying the incomingRefreshToken 
+        const decodedToken = jwt.verify( // Why we decoded? 
+            incomingRefreshToken, //Cause the token provided to the user was encrypted 
+            process.env.REFRESH_TOKEN_SECRET // and to match this token with one saved in the database, we need to decode it.
+        )
+    
+        // Accessing the user in database with the decoded token 
+        const user = await User.findById(decodedToken?._id) // if user found by decoded token, save in a variable
+        
+        if (!user) { // If user not found, throw error
+            throw new APIError(401, "Invalid Refresh Token!")
+        }
+    
+        // If Refresh Token doesn't matches, throw error
+        if (incomingRefreshToken !== user?.refreshToken) {
+            throw new APIError(401, "Refresh Token is Expired or Used")
+        }
+    
+        // If Refresh Token matches, Generate new one
+        const {newAccessToken, newRefreshToken} = await generateAccessAndRefreshTokens(user._id) // As its a database quert, so it will take a bit of time that's why used await keyword
+        
+        // helps while sending cookies
+        const options = { // by tagging them true, cookies can only be modified from server and not through frontend 
+            httpOnly: true,
+            secure: true
+        }
+    
+        // returning a response with cookies to front end
+        return res
+        .status(200)
+        .cookie("accessToken", newAccessToken, options)
+        .cookie("refreshToken", newRefreshToken, options)
+        .json(
+            new APIResponse(
+                200,
+                {accessToken: newAccessToken, refreshToken: newRefreshToken}, // just as a refrence so that the data reach to the right place
+                "Access Token Refreshed!"
+            )
+        )
+    } catch (error) {
+        throw new APIError(401, error?.message || "Invalid Refresh token")
+    }
 
+})
 
 
 
@@ -458,7 +513,8 @@ const loggedOutUser = asyncHandler(async(req, res) => {
 export{
     registerUser,
     loginUser, 
-    loggedOutUser
+    loggedOutUser,
+    refreshAccessToken
 } // exporting as an object
 
 // we import this to app.js file
