@@ -503,18 +503,180 @@ const refreshAccessToken = asyncHandler(async(req, res) =>{
 })
 
 
+// ----------------------------------------------------------------------------------------------/
+                                // CHANGE CURRENT PASSWORD //
+// ----------------------------------------------------------------------------------------------/
 
+const changeCurrentPassword = asyncHandler(async(req, res) => {
 
+    const {oldPassword, newPassword} = req.body // What fields you want to take
+
+    const user = await User.findById(req.user?._id)// Find old user from request body, as in auth.middleware req have access to user --> which will give us the user id
+
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword) // gives boolean as response
+
+    if (!isPasswordCorrect) { // If old password is incorrect
+        throw new APIError(401, "Invalid old Password")
+    }
+
+    // Changing it
+    user.password = newPassword // this sets password variable as new password, it didn't modified or saved in database yet.
+    
+    //  to save modification in database or to update the user information in database
+    await user.save({validateBeforeSave: false}) // as we don't want to validate the user before saving the changes in database, 
+    // we just wanted to call only the hook associated with password
+
+    return res
+    .status(200)
+    .json( new APIResponse(200, {}, "Password updated Successfully!!"))
+})
 
 
 // ----------------------------------------------------------------------------------------------/
-                           // EXPORTING THE Functions //
+                    // FETCHING CURRENT USER (if the user is logged in) //
+// ----------------------------------------------------------------------------------------------/
+
+const getCurrentUser = asyncHandler(async(req, res) => {
+    return res
+    .status(200)
+    .json(200, req.user, "Current User Fetched Successfully!!!") // AS we injected user in request while making the middleware that's why we can fetch the user easily
+})
+
+// ----------------------------------------------------------------------------------------------/
+                                // UPDATE ACCOUNT(user) DETAILS //
+// ----------------------------------------------------------------------------------------------/
+
+const updateAccountDetails = asyncHandler(async(req, res) => {
+    const{fullName, email} = req.body
+
+    if(!fullName || !email) {
+        throw APIError(401, "all fields are empty")
+    }
+
+    const user = User.findByIdAndUpdate( // const user will save the information returned, once this successfully run
+        req.user?._id, // inserted query
+        { // Object and associated mongoDB operators ($)
+            $set : { // set receives an object which contains the required parameters to update
+                    fullName : fullName, // 1st one is where to set : 2nd one is what to set
+                    email: email // email --> we can also provide what to set directly, if we writing it in defined order
+            }
+        }, 
+        {new : true} // if this is true, so the information we get after updation, will return here
+    ).select("-password") // while returning the user, don't return password with it
+
+/* 
+WHY we used select method here?
+ 
+to optimize the calls, otherwise we have to run another query as findByID on user._id and 
+then we remove the password or any confidential data field from it in same manner (by calling select function) and then we return the user. 
+but, here as we set new as true, which actually returns the user after saving in database. 
+so, running another query makes no sense. 
+*/
+
+return res
+.status(200)
+.json(new APIResponse(200, user, "Account details updated successfully!!"))
+
+})
+
+// ----------------------------------------------------------------------------------------------/
+                                // UPDATING User's Avatar Image //
+// ----------------------------------------------------------------------------------------------/
+
+/* 
+TODOs (while setting the routes)
+1) use of Multer Middleware, to accept the files
+2) use of auth middleware, cause we want only those users who are already logged in
+*/
+
+const updateUserAvatar = asyncHandler(async(req, res) => {
+    const avatarLocalPath = req.file?.path // if we get file in request the get only the path of the file 
+    // we didn't write "req.files" here as we are expecting only one file not an array from the user.
+
+    if (!avatarLocalPath) {
+        throw new APIError(400, "Avatar file is missing!!!")
+    }
+
+    // to save/upload the file on cloudinary
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+
+    // if file is saved on cloudinary but we didn't get the url
+    if(!avatar.url){
+        throw new APIError(400, "Error while uploading the avatar")
+    }
+
+    // update the avatar for the user 
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set : { // we user only update cause we want to update only one field in the user not the whole user
+                    avatar : avatar.url // as this will be saved in the database, which accepts the data as text not file
+            }
+        },
+        {new: true}
+     ).select("-password")
+
+     return res
+     .status(200)
+     .json(new APIResponse(200, user, "Avatar Image updated successfully!!!"))
+})
+
+// ----------------------------------------------------------------------------------------------/
+                            // UPDATING User's Cover Image //
+// ----------------------------------------------------------------------------------------------/
+
+/* 
+TODOs (while setting the routes)
+1) use of Multer Middleware, to accept the files
+2) use of auth middleware, cause we want only those users who are already logged in
+*/
+
+const updateUserCoverImage = asyncHandler(async(req, res) => {
+    const coverImageLocalPath = req.file?.path // if we get file in request the get only the path of the file 
+    // we didn't write "req.files" here as we are expecting only one file not an array from the user.
+
+    if (!coverImageLocalPath) {
+        throw new APIError(400, "Cover Image file is missing!!!")
+    }
+
+    // to save/upload the file on cloudinary
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+
+    // if file is saved on cloudinary but we didn't get the url
+    if(!coverImage.url){
+        throw new APIError(400, "Error while uploading the Cover Image")
+    }
+
+    // update the avatar for the user 
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set : { // we user only update cause we want to update only one field in the user not the whole user
+                coverImage : coverImage.url // as this will be saved in the database, which accepts the data as text not file
+            }
+        },
+        {new: true}
+     ).select("-password")
+
+     return res
+     .status(200)
+     .json(new APIResponse(200, user, "Cover Image updated successfully!!!"))
+})
+
+
+// ----------------------------------------------------------------------------------------------/
+                                // EXPORTING THE Functions //
 // ----------------------------------------------------------------------------------------------/
 export{
     registerUser,
     loginUser, 
     loggedOutUser,
-    refreshAccessToken
+    refreshAccessToken,
+    changeCurrentPassword,
+    getCurrentUser,
+    updateAccountDetails,
+    updateUserAvatar,
+    updateUserCoverImage
 } // exporting as an object
 
-// we import this to app.js file
+// we import these to app.js file
