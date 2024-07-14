@@ -684,6 +684,97 @@ const updateUserCoverImage = asyncHandler(async(req, res) => {
      .json(new APIResponse(200, user, "Cover Image updated successfully!!!"))
 })
 
+// ----------------------------------------------------------------------------------------------/
+                                // EXPORTING THE Functions //
+// ----------------------------------------------------------------------------------------------/
+
+const getUserChennelProfile = asyncHandler(async(req, res) => {
+    const {username} = req.params // Taking username from request body as it holds properties of a user
+
+    if (!username?.trim()) {
+        throw new APIError(400, "Username is missing")
+    }
+    // fetching count of subscribers to a channel 
+    const channel = await User.aggregate(// using aggregate method of MongoDB
+        [ // take Arrays as parameter. As output goes as an array
+            {//Pipeline stages. like, Stage 1 ===> Filtering the document.
+            $match: {username: username?.toLowerCase()} // $ defines field
+            },
+
+            {// Pipeline stage 2 ===> Selecting/Filtering all the users subscribing a perticular channel (it will store all the filtered documents)
+                $lookup:{
+                    from:"subscriptions", // from which (Subscription) model
+                    localField:"_id", // local field, select all the ids'. From the defined model
+                    foreignField: "channel", // forign field, who subscribed a perticular channel . From the defined model
+                    as:"subscribers" // defining pipeline name, as it is storing multiple documents in an object
+                }
+            },
+
+            {// Pipeline stage 3 ===> Selecting/Filtering all the users whom a perticular channel subscribed (it will store all the filtered documents)
+                $lookup:{
+                    from:"subscriptions", // from which (Subscription) model
+                    localField:"_id", // local field, select all the ids'. From the defined model
+                    foreignField: "subscriber", // forign field, whom a perticular channel subscribed. From the defined model
+                    as:"subscribedTo" // defining field pipeline name, as it is storing multiple documents in an object
+                }
+            },
+
+            {// Pipeline stage 4 ===> adding additional fields to the existing lookup object 
+                $addFields:{
+                    subscribersCount: {// name of the additional field, to store count of users 
+                        $size: "$subscribers" // calculating size/ Counting documents(users) from the field of defined lookup object
+                    },
+                    subscribedToCount: {// Same for other field
+                        $size: "$subscribedTo"
+                    },
+                    isSubscribed:{ // Adding field, to calculate if a perticular channel is subscribed by a user or not.
+                        $cond: { // If condition 
+                            if: {
+                                $in: // use of $in, to check if a perticular condition is valid or not
+                                [req.user?._id, // what to search, as user is already loggedIn, so we can fetch id from the user as it can be accessed by request
+                                "$subscribers.subscriber" // to search from which object. As subscribers(object) is a defined field here, and then from this field we can fetch subscriber information 
+                                ]
+                                /*
+                                In Short, in $in (field) it can check through array or object both
+                                * In 1st paramater, we define what to search 
+                                * In 2nd paramater, from which object, we want to search
+                                */
+                            }, 
+                            then: true, // If the defined condition is valid
+                            else: false // If not valid
+                        }
+                    }
+                }
+            },
+            { // pipeline stage 5 ===> to (Project /pass on) selected fields/properties of an object (user object)
+                $project: {
+                    subscribersCount : 1,
+                    subscribedToCount : 1,
+                    isSubscribed : 1,
+                    fullName : 1,
+                    username : 1,
+                    coverImage : 1, 
+                    avatar : 1,
+                    email : 1
+                }
+            }
+
+        ])
+
+        if(!channel?.lenght) {
+            throw new APIError(404, "channel does not exist")
+        }
+        console.log("===================================================");
+        console.log("Channels' details : \n", channel);
+        console.log("===================================================");
+
+        return res
+        .status(200)
+        .json(
+            new APIResponse(200, channel[0], "User channel fetched successfully")
+        )
+})
+
 
 // ----------------------------------------------------------------------------------------------/
                                 // EXPORTING THE Functions //
@@ -697,7 +788,8 @@ export{
     getCurrentUser,
     updateAccountDetails,
     updateUserAvatar,
-    updateUserCoverImage
+    updateUserCoverImage,
+    getUserChennelProfile
 } // exporting as an object
 
 // we import these to app.js file
