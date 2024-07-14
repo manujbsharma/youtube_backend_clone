@@ -539,7 +539,7 @@ const changeCurrentPassword = asyncHandler(async(req, res) => {
 const getCurrentUser = asyncHandler(async(req, res) => {
     return res
     .status(200)
-    .json(200, req.user, "Current User Fetched Successfully!!!") // AS we injected user in request while making the middleware that's why we can fetch the user easily
+    .json(new APIResponse(200, req.user, "Current User Fetched Successfully!!!")) // AS we injected user in request while making the middleware that's why we can fetch the user easily
 })
 
 // ----------------------------------------------------------------------------------------------/
@@ -553,7 +553,7 @@ const updateAccountDetails = asyncHandler(async(req, res) => {
         throw APIError(401, "all fields are empty")
     }
 
-    const user = User.findByIdAndUpdate( // const user will save the information returned, once this successfully run
+    const user = await User.findByIdAndUpdate( // const user will save the information returned, once this successfully run
         req.user?._id, // inserted query
         { // Object and associated mongoDB operators ($)
             $set : { // set receives an object which contains the required parameters to update
@@ -590,6 +590,16 @@ TODOs (while setting the routes)
 */
 
 const updateUserAvatar = asyncHandler(async(req, res) => {
+
+    // fetching and Deleting the old avatar image
+    const oldImageDeleted = await deleteFromCloudinary(req.user.avatar);
+    
+    // Check if the old avatar deletion was successful
+    if (!oldImageDeleted) {
+        throw new ApiError(400, "Failed to delete old avatar image.");
+    }
+
+//-------------------------------------------------------------------------------
     const avatarLocalPath = req.file?.path // if we get file in request the get only the path of the file 
     // we didn't write "req.files" here as we are expecting only one file not an array from the user.
 
@@ -638,7 +648,18 @@ const updateUserCoverImage = asyncHandler(async(req, res) => {
     if (!coverImageLocalPath) {
         throw new APIError(400, "Cover Image file is missing!!!")
     }
+    
+    // fetching and Deleting the old avatar image
+    const oldCoverImageDeleted = await deleteFromCloudinary(req.user.avatar);
 
+    // Check if the old avatar deletion was successful
+    if (!oldCoverImageDeleted) {
+        throw new ApiError(400, "Failed to delete old avatar image.");
+    }
+    else{
+        console.log("Old Avatar File Deleted")
+    }
+    
     // to save/upload the file on cloudinary
     const coverImage = await uploadOnCloudinary(coverImageLocalPath)
 
