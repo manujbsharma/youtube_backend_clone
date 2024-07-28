@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js"; // used to add, delete and check
 import { uploadOnCloudinary } from "../utils(utilities)/couldinary.js"; // used to upload files on clodinary server
 import { APIResponse } from "../utils(utilities)/APIResponse.js"; // used to return structured and crafted response
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 
 // ----------------------------------------------------------------------------------------------/
                     // METHODS -> FUNCTIONS that can called MULTIPLE TIMES //
@@ -771,10 +772,65 @@ const getUserChennelProfile = asyncHandler(async(req, res) => {
         return res
         .status(200)
         .json(
-            new APIResponse(200, channel[0], "User channel fetched successfully")
+            // new APIResponse(200, channel[0], "User channel fetched successfully")
         )
 })
 
+// To populate the details related to a video
+const getWatchHistory = asyncHandler(async(req, res) => {
+    const user = await User.aggregate([
+        {
+            $match: { // filtering records related to a perticular user
+                _id: new mongoose.Types.ObjectId.createFromHexString(req.user._id)
+            }
+        },
+        { // for a perticular user, we looking for videos he/she played  
+            $lookup: {
+                from: "videos", // from videos database
+                localField: "watchHistory", // where local field of the user is watchHistory
+                foreignField: "_id", // looking for videos by its id
+                as: "watchHistory", // and, calling this lookup as watchHistory
+                pipeline: [ // nested search / filter within the videos related to the user's profile
+                    {
+                        $lookup: { // filtering the videos own by the selected user 
+                            from: 'users', // from users database
+                            localField: 'owner', // where local field for those videos will be the owner of the selected videos (in earlier search)
+                            foreignField: '_id', // looking for the owner by its id
+                            as: "owner", // calling this lookup as owner
+                            pipeline: [ // adding further pipeline as we are intrested in specific fields of the owner (not all)
+                                {
+                                    $project: { // that's why we projecting or populating the selective fields based on the filter above.
+                                        userName: 1, // here 1 represent true or allowed 
+                                        fullName: 1,
+                                        avatar: 1
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    { // to restructure the array for the front end, which we will get as result of the owner lookup field (OPTIONAL)
+                        $addFields: {
+                            owner : { // overwritting the existing owner field by giving the same name to this one
+                                $first : "$owner" // fetching first value from the owner field( as owner is a field that's why we used $) array 
+                                // to fetch first element from an array. 2 methods are there, 1. arrayelementat 2. $first (easier)
+                            } // this will provide an object from which front end person can easily fetch the values
+                        }
+                    }
+                ]
+            }
+        }
+    ])
+
+    return res
+    .status(200)
+    .json(
+        new APIResponse(
+            200,
+            user[0].getWatchHistory,
+            "Watch history fetched Successfully!!! "
+        )
+    )
+})
 
 // ----------------------------------------------------------------------------------------------/
                                 // EXPORTING THE Functions //
@@ -789,7 +845,8 @@ export{
     updateAccountDetails,
     updateUserAvatar,
     updateUserCoverImage,
-    getUserChennelProfile
+    getUserChennelProfile,
+    getWatchHistory
 } // exporting as an object
 
 // we import these to app.js file
