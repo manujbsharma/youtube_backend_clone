@@ -686,7 +686,7 @@ const updateUserCoverImage = asyncHandler(async(req, res) => {
 })
 
 // ----------------------------------------------------------------------------------------------/
-                                // EXPORTING THE Functions //
+                                // Getting Details of the user using it's username //
 // ----------------------------------------------------------------------------------------------/
 
 const getUserChennelProfile = asyncHandler(async(req, res) => {
